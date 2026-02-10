@@ -195,7 +195,7 @@
               <input type="email" id="emailOnly" placeholder="Enter your email" value="<%= oldInput?.email || '' %>"
                 required />
             </div>
-            <button id="sendOtpBtn" class="btn-primary">Send OTP</button>
+            <button type="button" id="sendOtpBtn" class="btn-primary">Send OTP</button>
           </div>
 
           <!-- Stage 2: OTP input -->
@@ -203,7 +203,7 @@
             <div class="input-group">
               <input type="text" id="otpInput" placeholder="Enter OTP" required />
             </div>
-            <button id="verifyOtpBtn" class="btn-secondary">Verify OTP</button>
+            <button type="button" id="verifyOtpBtn" class="btn-secondary">Verify OTP</button>
           </div>
           <% } %>
 
@@ -315,177 +315,135 @@
                       <button type="button" id="pinFromMapBtn" class="btn-secondary">📍 Pin from Map</button>
                     </div>
 
-                    <!-- ✅ Service Area Config (New Radius Logic) -->
+                    <!-- Service Area (Map) -->
                     <div class="input-group">
-                      <b style="color: maroon;">Delivery Radius (KM)</b>
-                      <input type="number" id="deliveryRadius" name="deliveryRadius" min="0" step="0.1"
-                        placeholder="e.g. 5"
-                        value="<%= (typeof oldInput?.deliveryRadius !== 'undefined' ? oldInput.deliveryRadius : (editing && typeof user.deliveryRadius !== 'undefined' ? user.deliveryRadius : '')) %>"
-                        required />
-                      <small style="color: #666; display:block; margin-top:4px;">Enter the maximum distance you deliver
-                        to.</small>
+                      <b style="color: maroon;">Service Area</b>
+                      <input type="hidden" id="serviceArea" name="serviceArea"
+                        value='<%= oldInput.serviceArea || (editing ? JSON.stringify(user.serviceArea) : "") %>' />
+                      <button type="button" id="drawAreaBtn" class="btn-secondary">Draw Your Service Area</button>
+                      <small style="color: green; display: none;" id="uare">You are covered!</small>
                     </div>
 
-                    <div class="input-group"
-                      style="background:#fff0f6; padding:15px; border-radius:10px; border:1px solid #f8bbd0;">
-                      <b style="color: #e91e63;">Directional Limits (Optional)</b>
-                      <p style="font-size:13px; color:#555; margin-top:2px;">
-                        Set limits for specific directions. Leave <b>0</b> or empty to follow the main radius.
-                      </p>
-
-                      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
-                        <div>
-                          <label
-                            style="position:static; transform:none; background:none; color:#333; font-size:0.9rem;">North
-                            Limit (KM)</label>
-                          <input type="number" id="limitNorth" name="limitNorth" min="0" step="0.1" placeholder="North"
-                            value="<%= (typeof oldInput?.limitNorth !== 'undefined' ? oldInput.limitNorth : (editing && typeof user.limitNorth !== 'undefined' ? user.limitNorth : '')) %>"
-                            style="width:100%;">
-                        </div>
-                        <div>
-                          <label
-                            style="position:static; transform:none; background:none; color:#333; font-size:0.9rem;">South
-                            Limit (KM)</label>
-                          <input type="number" id="limitSouth" name="limitSouth" min="0" step="0.1" placeholder="South"
-                            value="<%= (typeof oldInput?.limitSouth !== 'undefined' ? oldInput.limitSouth : (editing && typeof user.limitSouth !== 'undefined' ? user.limitSouth : '')) %>"
-                            style="width:100%;">
-                        </div>
-                        <div>
-                          <label
-                            style="position:static; transform:none; background:none; color:#333; font-size:0.9rem;">East
-                            Limit (KM)</label>
-                          <input type="number" id="limitEast" name="limitEast" min="0" step="0.1" placeholder="East"
-                            value="<%= (typeof oldInput?.limitEast !== 'undefined' ? oldInput.limitEast : (editing && typeof user.limitEast !== 'undefined' ? user.limitEast : '')) %>"
-                            style="width:100%;">
-                        </div>
-                        <div>
-                          <label
-                            style="position:static; transform:none; background:none; color:#333; font-size:0.9rem;">West
-                            Limit (KM)</label>
-                          <input type="number" id="limitWest" name="limitWest" min="0" step="0.1" placeholder="West"
-                            value="<%= (typeof oldInput?.limitWest !== 'undefined' ? oldInput.limitWest : (editing && typeof user.limitWest !== 'undefined' ? user.limitWest : '')) %>"
-                            style="width:100%;">
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Preview Map -->
-                    <div class="input-group">
-                      <b style="color: maroon;">Service Area Preview</b>
-                      <div id="previewMap"
-                        style="height: 300px; width: 100%; border-radius: 10px; margin-top:10px; border:2px solid #ddd;">
+                    <div id="mapModal" class="modal">
+                      <div class="modal-content">
+                        <span class="close" id="closeMapModal">&times;</span>
+                        <h3 style="text-align: center; color: #333;">Draw Your Service Area</h3>
+                        <div id="map" style="height: 400px; width: 100%;"></div>
+                        <button type="button" id="saveAreaBtn" class="btn-primary"
+                          style="width: 100%; margin-top: 10px;">Save Area</button>
                       </div>
                     </div>
 
                     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+                    <link rel="stylesheet"
+                      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
                     <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
                     <script>
-                      (function () {
-                        let previewMap, circleLayer, markerLayer, directionGroup;
+                      // --- Service Area Map (Leaflet Draw) ---
+                      const drawAreaBtn = document.getElementById('drawAreaBtn');
+                      const mapModal = document.getElementById('mapModal');
+                      const closeMapModal = document.getElementById('closeMapModal');
+                      const saveAreaBtn = document.getElementById('saveAreaBtn');
+                      const serviceAreaInput = document.getElementById('serviceArea');
+                      const uare = document.getElementById('uare');
 
-                        // Initialize Map
-                        function initPreviewMap() {
-                          const latEl = document.getElementById('lat');
-                          const lngEl = document.getElementById('lng');
-                          const initialLat = parseFloat(latEl?.value) || 26.8467;
-                          const initialLng = parseFloat(lngEl?.value) || 80.9462;
+                      let map, drawnItems;
 
-                          if (!previewMap) {
-                            previewMap = L.map('previewMap').setView([initialLat, initialLng], 12);
-                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(previewMap);
-                            markerLayer = L.marker([initialLat, initialLng]).addTo(previewMap);
-                            directionGroup = L.layerGroup().addTo(previewMap);
+                      if (serviceAreaInput.value) {
+                        try {
+                          const existingArea = JSON.parse(serviceAreaInput.value);
+                          if (existingArea && existingArea.coordinates && existingArea.coordinates.length > 0) {
+                            uare.style.display = 'block';
+                            uare.textContent = 'Service area saved!';
                           }
-                          updateCircle();
+                        } catch (e) { console.error("Error parsing initial service area", e); }
+                      }
+
+                      drawAreaBtn.addEventListener('click', () => {
+                        mapModal.style.display = 'block';
+                        setTimeout(() => {
+                          if (!map) initMap();
+                          else map.invalidateSize();
+                        }, 200);
+                      });
+
+                      closeMapModal.addEventListener('click', () => {
+                        mapModal.style.display = 'none';
+                      });
+
+                      window.addEventListener('click', (event) => {
+                        if (event.target == mapModal) {
+                          mapModal.style.display = 'none';
                         }
+                      });
 
-                        function updateCircle() {
-                          const radiusKM = parseFloat(document.getElementById('deliveryRadius').value) || 0;
-                          const lat = parseFloat(document.getElementById('lat').value);
-                          const lng = parseFloat(document.getElementById('lng').value);
+                      function initMap() {
+                        const latEl = document.getElementById('lat');
+                        const lngEl = document.getElementById('lng');
+                        // Default to Lucknow if no lat/lng
+                        const initialLat = parseFloat(latEl.value) || 26.8467;
+                        const initialLng = parseFloat(lngEl.value) || 80.9462;
 
-                          if (markerLayer && !isNaN(lat) && !isNaN(lng)) {
-                            const newLatLng = new L.LatLng(lat, lng);
-                            markerLayer.setLatLng(newLatLng);
-                            previewMap.panTo(newLatLng);
-                          }
+                        map = L.map('map').setView([initialLat, initialLng], 13);
 
-                          if (circleLayer) previewMap.removeLayer(circleLayer);
-                          directionGroup.clearLayers(); // Clear old lines/labels
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                          attribution: '© OpenStreetMap contributors'
+                        }).addTo(map);
 
-                          if (!isNaN(lat) && !isNaN(lng)) {
-                            const radiusMeters = (radiusKM > 0 ? radiusKM : 1) * 1000; // default 1km if 0 for visibility
+                        drawnItems = new L.FeatureGroup();
+                        map.addLayer(drawnItems);
 
-                            // Draw Circle
-                            if (radiusKM > 0) {
-                              circleLayer = L.circle([lat, lng], {
-                                color: '#e91e63',
-                                fillColor: '#f48fb1',
-                                fillOpacity: 0.3,
-                                radius: radiusMeters
-                              }).addTo(previewMap);
-                              previewMap.fitBounds(circleLayer.getBounds());
+                        // Load existing polygon if any
+                        if (serviceAreaInput.value) {
+                          try {
+                            const areaData = JSON.parse(serviceAreaInput.value);
+                            if (areaData && areaData.coordinates) {
+                              const latlngs = areaData.coordinates[0].map(coord => [coord[1], coord[0]]);
+                              const polygon = L.polygon(latlngs, { color: 'blue' });
+                              drawnItems.addLayer(polygon);
+                              map.fitBounds(polygon.getBounds());
                             }
-
-                            // --- Draw Direction Lines & Labels ---
-                            const lineDistance = radiusMeters * 1.2; // extending slightly beyond radius
-
-                            // Helpers to calculate destination points
-                            const toRad = (d) => d * Math.PI / 180;
-                            const toDeg = (r) => r * 180 / Math.PI;
-                            const R = 6371e3; // Earth radius in meters
-
-                            const getPoint = (lat, lng, bearing, dist) => {
-                              const φ1 = toRad(lat), λ1 = toRad(lng);
-                              const brng = toRad(bearing);
-                              const φ2 = Math.asin(Math.sin(φ1) * Math.cos(dist / R) + Math.cos(φ1) * Math.sin(dist / R) * Math.cos(brng));
-                              const λ2 = λ1 + Math.atan2(Math.sin(brng) * Math.sin(dist / R) * Math.cos(φ1), Math.cos(dist / R) - Math.sin(φ1) * Math.sin(φ2));
-                              return [toDeg(φ2), toDeg(λ2)];
-                            };
-
-                            const dirs = [
-                              { label: 'N', angle: 0, color: 'blue' },
-                              { label: 'E', angle: 90, color: 'green' },
-                              { label: 'S', angle: 180, color: 'blue' },
-                              { label: 'W', angle: 270, color: 'green' }
-                            ];
-
-                            dirs.forEach(d => {
-                              const endPoint = getPoint(lat, lng, d.angle, lineDistance);
-
-                              // Line
-                              L.polyline([[lat, lng], endPoint], {
-                                color: d.color,
-                                weight: 2,
-                                opacity: 0.6,
-                                dashArray: '5, 5'
-                              }).addTo(directionGroup);
-
-                              // Label
-                              L.marker(endPoint, {
-                                icon: L.divIcon({
-                                  className: 'direction-label',
-                                  html: `<b style="color:${d.color}; font-size:16px; background:white; padding:2px 5px; border-radius:4px; border:1px solid ${d.color};">${d.label}</b>`,
-                                  iconSize: [30, 20],
-                                  iconAnchor: [15, 10]
-                                })
-                              }).addTo(directionGroup);
-                            });
+                          } catch (err) {
+                            console.error("Error parsing service area JSON:", err);
                           }
                         }
 
-                        // Watch for inputs
-                        document.getElementById('deliveryRadius')?.addEventListener('input', updateCircle);
+                        const drawControl = new L.Control.Draw({
+                          edit: { featureGroup: drawnItems },
+                          draw: {
+                            polygon: true,
+                            marker: false,
+                            circle: false,
+                            rectangle: false,
+                            polyline: false,
+                            circlemarker: false
+                          }
+                        });
+                        map.addControl(drawControl);
 
-                        const observer = new MutationObserver(updateCircle);
-                        const lLatInput = document.getElementById('lat');
-                        const lLngInput = document.getElementById('lng');
-                        if (lLatInput) observer.observe(lLatInput, { attributes: true, attributeFilter: ['value'] });
-                        if (lLngInput) observer.observe(lLngInput, { attributes: true, attributeFilter: ['value'] });
+                        map.on(L.Draw.Event.CREATED, function (event) {
+                          const layer = event.layer;
+                          drawnItems.clearLayers(); // Only one polygon allowed
+                          drawnItems.addLayer(layer);
+                        });
+                      }
 
-                        document.addEventListener('DOMContentLoaded', () => { setTimeout(initPreviewMap, 500); });
-                      })();
+                      saveAreaBtn.addEventListener('click', () => {
+                        const layers = drawnItems.getLayers();
+                        if (layers.length > 0) {
+                          const layer = layers[0];
+                          const geojson = layer.toGeoJSON();
+                          const geometry = geojson.geometry;
+                          serviceAreaInput.value = JSON.stringify(geometry);
+                          uare.style.display = 'block';
+                          uare.textContent = 'Service area drawn & saved!';
+                          mapModal.style.display = 'none';
+                        } else {
+                          alert("Please draw a shape first!");
+                        }
+                      });
                     </script>
 
                     <div class="input-group">
@@ -591,11 +549,11 @@
 
 
       <!-- Google Maps Pin Modal -->
-      <div id="mapModal"
+      <div id="googleMapModal"
         style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; justify-content:center; align-items:center;">
         <div
           style="width:90%; max-width:600px; height:70%; background:#fff; border-radius:12px; overflow:hidden; position:relative;">
-          <div id="map" style="width:100%; height:100%;"></div>
+          <div id="googleMap" style="width:100%; height:100%;"></div>
           <button id="closeMap"
             style="position:absolute;top:12px;right:12px;background:#ffffff;color:#007bff;font-weight:600;font-size:15px;border:1.5px solid #007bff;border-radius:8px;padding:6px 14px;cursor:pointer;"
             onmouseover="this.style.background='#007bff'; this.style.color='#fff'"
@@ -651,7 +609,8 @@
           const verifyOtpBtn = document.getElementById("verifyOtpBtn");
           let verifiedEmail = "";
 
-          sendOtpBtn?.addEventListener("click", async () => {
+          sendOtpBtn?.addEventListener("click", async (e) => {
+            e.preventDefault(); // Prevent form submission just in case
             const email = document.getElementById("emailOnly").value;
             if (!email) return alert("Enter email");
             sendOtpBtn.textContent = "Sending OTP…";
@@ -668,9 +627,13 @@
                 verifiedEmail = email;
                 emailStage.classList.add("hidden");
                 otpStage.classList.remove("hidden");
-              } else alert(data.message);
-            } catch {
-              alert("Error sending OTP");
+              } else {
+                alert(data.message || "Something went wrong.");
+                console.error("OTP Error:", data);
+              }
+            } catch (err) {
+              console.error("Fetch error:", err);
+              alert("Error sending OTP. Check console for details.");
             } finally {
               sendOtpBtn.textContent = "Send OTP";
               sendOtpBtn.disabled = false;
@@ -723,7 +686,7 @@
 
         const useCurrentBtn = document.getElementById("useCurrentBtn");
         const pinFromMapBtn = document.getElementById("pinFromMapBtn");
-        const mapModal = document.getElementById("mapModal");
+        const googleMapModal = document.getElementById("googleMapModal");
         const closeMap = document.getElementById("closeMap");
         const locationInput = document.getElementById("location");
         const latInput = document.getElementById("lat");
@@ -748,16 +711,16 @@
         });
 
         pinFromMapBtn?.addEventListener("click", () => {
-          mapModal.style.display = "flex";
+          googleMapModal.style.display = "flex";
           if (navigator.geolocation)
-            navigator.geolocation.getCurrentPosition((pos) => initMap(pos.coords.latitude, pos.coords.longitude),
-              () => initMap(26.8467, 80.9462));
-          else initMap(26.8467, 80.9462);
+            navigator.geolocation.getCurrentPosition((pos) => initGoogleMap(pos.coords.latitude, pos.coords.longitude),
+              () => initGoogleMap(26.8467, 80.9462));
+          else initGoogleMap(26.8467, 80.9462);
         });
 
-        function initMap(lat, lng) {
+        function initGoogleMap(lat, lng) {
           setTimeout(() => {
-            const map = new google.maps.Map(document.getElementById("map"), { center: { lat, lng }, zoom: 14 });
+            const map = new google.maps.Map(document.getElementById("googleMap"), { center: { lat, lng }, zoom: 14 });
             const marker = new google.maps.Marker({ position: { lat, lng }, map, draggable: true });
             const geocoder = new google.maps.Geocoder();
             updateLocation(geocoder, lat, lng);
@@ -777,7 +740,7 @@
           });
         }
 
-        closeMap?.addEventListener("click", () => { mapModal.style.display = "none"; });
+        closeMap?.addEventListener("click", () => { googleMapModal.style.display = "none"; });
       </script>
 
 
