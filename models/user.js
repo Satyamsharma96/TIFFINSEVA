@@ -42,17 +42,17 @@ const userSchema = mongoose.Schema({
   // ✅ Vendor-only fields
   serviceName: { type: String, trim: true },
 
-  // ✅ New Radius & Directional Limits
-  deliveryRadius: { type: Number, default: 0 }, // in KM
-  limitNorth: { type: Number, default: 0 },
-  limitSouth: { type: Number, default: 0 },
-  limitEast: { type: Number, default: 0 },
-  limitWest: { type: Number, default: 0 },
-
-  // Deprecated Polygon (keeping just in case transition is needed, but hidden)
+  // 🔥 Polygon service area instead of radius
   serviceArea: {
-    type: { type: String, enum: ['Polygon'], default: 'Polygon' },
-    coordinates: { type: [[[Number]]], default: [] }
+    type: {
+      type: String,
+      enum: ['Polygon'],
+      default: 'Polygon'
+    },
+    coordinates: {
+      type: [[[Number]]],
+      default: []
+    }
   },
 
   bannerImage: String,
