@@ -407,14 +407,7 @@ exports.postVendorSignUp = [
     .notEmpty().withMessage("Service name is required.")
     .matches(/^[a-zA-Z0-9\s&\-\.,]+$/).withMessage("Service name may contain letters, numbers, and spaces only."),
 
-  check("deliveryRadius")
-    .notEmpty().withMessage("Delivery radius is required.")
-    .isNumeric().withMessage("Delivery radius must be a number (KM)."),
-
-  check("limitNorth").optional().isNumeric(),
-  check("limitSouth").optional().isNumeric(),
-  check("limitEast").optional().isNumeric(),
-  check("limitWest").optional().isNumeric(),
+  check("serviceArea").notEmpty().withMessage("Please draw your service area on the map."),
 
   check("pricePerDay")
     .notEmpty().withMessage("Price per day is required.")
@@ -456,10 +449,9 @@ exports.postVendorSignUp = [
     const errors = validationResult(req);
     const {
       firstName, email, password,
-      serviceName,
-      pricePerDay, pricePerMonthSingle, pricePerMonthBoth,
-      bankAccountNumber, bankIFSC, phoneNumber, bankName, accountHolderName,
-      deliveryRadius, limitNorth, limitSouth, limitEast, limitWest
+      location, lat, lng, serviceName,
+      serviceArea, pricePerDay, pricePerMonthSingle, pricePerMonthBoth,
+      bankAccountNumber, bankIFSC, phoneNumber, bankName, accountHolderName
     } = req.body;
 
     // 🧾 File placeholders
@@ -536,8 +528,13 @@ exports.postVendorSignUp = [
         throw new Error("Aadhaar document upload is required.");
       }
 
-      // ✅ Service Area (Polygon) is no longer used, but we keep DB compatible
-      let parsedArea = { type: "Polygon", coordinates: [] };
+      // ✅ Parse service area
+      let parsedArea;
+      try {
+        parsedArea = JSON.parse(serviceArea);
+      } catch {
+        throw new Error("Invalid service area data. Please re-draw the polygon.");
+      }
 
       // ✅ Hash password
       const hashedPassword = await bcrypt.hash(password, 8);
@@ -557,11 +554,6 @@ exports.postVendorSignUp = [
         lng,
         serviceName,
         serviceArea: parsedArea,
-        deliveryRadius: deliveryRadius || 0,
-        limitNorth: limitNorth || 0,
-        limitSouth: limitSouth || 0,
-        limitEast: limitEast || 0,
-        limitWest: limitWest || 0,
         pricePerDay,
         pricePerMonthSingle,
         pricePerMonthBoth,
@@ -668,14 +660,7 @@ exports.getEditPage = async (req, res) => {
         profilePicture: user.profilePicture || "",
         profilePicturePublicId: user.profilePicturePublicId || "",
         bannerImage: user.bannerImage || "",
-        bannerImagePublicId: user.bannerImagePublicId || "",
-
-        // ✅ New Radius Fields (Fix: Allow 0 to be shown)
-        deliveryRadius: (user.userType === "vender" && user.deliveryRadius !== undefined) ? user.deliveryRadius : "",
-        limitNorth: (user.userType === "vender" && user.limitNorth !== undefined) ? user.limitNorth : "",
-        limitSouth: (user.userType === "vender" && user.limitSouth !== undefined) ? user.limitSouth : "",
-        limitEast: (user.userType === "vender" && user.limitEast !== undefined) ? user.limitEast : "",
-        limitWest: (user.userType === "vender" && user.limitWest !== undefined) ? user.limitWest : ""
+        bannerImagePublicId: user.bannerImagePublicId || ""
       },
 
       // ✅ Images and Aadhaar info
@@ -708,7 +693,7 @@ exports.postEditPage = async (req, res) => {
     firstName, dob, email, id,
     location, lat, lng, serviceName,
     pricePerDay, pricePerMonthSingle, pricePerMonthBoth,
-    deliveryRadius, limitNorth, limitSouth, limitEast, limitWest
+    serviceArea // 🟢 JSON string from frontend
   } = req.body;
 
   const files = req.files;
@@ -743,11 +728,6 @@ exports.postEditPage = async (req, res) => {
       lat: lat || user.lat || "",
       lng: lng || user.lng || "",
       serviceName: serviceName || user.serviceName || "",
-      deliveryRadius: deliveryRadius || user.deliveryRadius || "",
-      limitNorth: limitNorth || user.limitNorth || "",
-      limitSouth: limitSouth || user.limitSouth || "",
-      limitEast: limitEast || user.limitEast || "",
-      limitWest: limitWest || user.limitWest || "",
       pricePerDay: pricePerDay || user.pricePerDay || "",
       pricePerMonthSingle: pricePerMonthSingle || user.pricePerMonthSingle || "",
       pricePerMonthBoth: pricePerMonthBoth || user.pricePerMonthBoth || "",
@@ -861,14 +841,10 @@ exports.postEditPage = async (req, res) => {
       user.pricePerMonthSingle = pricePerMonthSingle || user.pricePerMonthSingle || "";
       user.pricePerMonthBoth = pricePerMonthBoth || user.pricePerMonthBoth || "";
 
-      // ✅ Update Radius & Limits
-      // ✅ Update Radius & Limits (Fix: Handle 0 and updates correctly)
-      // ✅ Update Radius & Limits (Fix: Force Parse Float)
-      if (deliveryRadius !== undefined && deliveryRadius !== null) user.deliveryRadius = parseFloat(deliveryRadius);
-      if (limitNorth !== undefined && limitNorth !== null) user.limitNorth = parseFloat(limitNorth);
-      if (limitSouth !== undefined && limitSouth !== null) user.limitSouth = parseFloat(limitSouth);
-      if (limitEast !== undefined && limitEast !== null) user.limitEast = parseFloat(limitEast);
-      if (limitWest !== undefined && limitWest !== null) user.limitWest = parseFloat(limitWest);
+      if (parsedArea && parsedArea.coordinates?.length > 0) {
+        console.log("🟢 Updating user.serviceArea with:", JSON.stringify(parsedArea, null, 2));
+        user.serviceArea = parsedArea;
+      }
     }
 
     // ================= GENERAL FIELDS =================
